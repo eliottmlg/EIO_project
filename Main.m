@@ -207,6 +207,7 @@ SE_d_GMM=sqrt(diag(VAR_d_GMM));
 CIlow_d_GMM=theta_d_GMM2-SE_d_GMM*1.96;
 CIupp_d_GMM=theta_d_GMM2+SE_d_GMM*1.96;
 
+% PERFORMING HANSEN TEST OF OVER-IDENTIFICATION
 hansenTestGMM(delta_output, X_d, Z_d, theta_d_GMM)
 
 RowNames={'Constant','Beta','Alpha'};
@@ -240,6 +241,7 @@ SE_d_GMM=sqrt(diag(VAR_d_GMM));
 CIlow_d_GMM=theta_d_GMM3-SE_d_GMM*1.96;
 CIupp_d_GMM=theta_d_GMM3+SE_d_GMM*1.96;
 
+% PERFORMING HANSEN TEST OF OVER-IDENTIFICATION
 hansenTestGMM(delta_output, X_d, Z_d, theta_d_GMM3)
 
 RowNames={'Constant','Beta','Alpha'};
@@ -269,6 +271,7 @@ fclose(fileID);
 % MARKET SHARE ESTIMATED FROM LOGIT
 nume=zeros(T_pre,J);
 deno=zeros(T_pre,1);
+deno=exp(deno);
 market_share_hat_matrix=zeros(T_pre,J);
 market_share_hat=zeros(T_pre*J,1);
 
@@ -276,7 +279,7 @@ market_share_hat=zeros(T_pre*J,1);
 for t=1:T_pre
     for j=1:J
         idx=(t-1)*J+j; % Linear index for market-share-related variables
-        utility=theta_d_GMM2(1,1)+theta_d_GMM2(2,1)*x((t-1)*J+j,1)+theta_d_GMM2(3,1)*price((t-1)*J+j,1)+xi_GMM2((t-1)*J+j,1);
+        utility=theta_d_GMM3(1,1)+theta_d_GMM3(2,1)*x((t-1)*J+j,1)+theta_d_GMM3(3,1)*price((t-1)*J+j,1)+xi_GMM3((t-1)*J+j,1);
         nume(t,j)=exp(utility);
         deno(t,1)=deno(t,1)+nume(t,j);
     end
@@ -297,15 +300,14 @@ end
 OFcoll=OF;
 OFcoll(11:end,11:end)=1;
 
-
 % ESTIMATED JACOBIAN DEMAND
 Qp=zeros(J*T_pre,J);
 for t=1:T_pre
     for j=1:J
-        Qp(market==t,j)=abs(theta_d_GMM2(3,1))*(market_share_hat(market==t,1).*market_share_hat_matrix(t,j));
+        Qp(market==t,j)=abs(theta_d_GMM3(3,1))*(market_share_hat(market==t,1).*market_share_hat_matrix(t,j));
     end
     Qp(market==t,:)=Qp(market==t,:).*(ones(J,J)-eye(J));
-    Qp(market==t,:)=Qp(market==t,:)+diag(theta_d_GMM2(3,1)*(market_share_hat(market==t,1).*(ones(J,1)-market_share_hat(market==t,1))));
+    Qp(market==t,:)=Qp(market==t,:)+diag(theta_d_GMM3(3,1)*(market_share_hat(market==t,1).*(ones(J,1)-market_share_hat(market==t,1))));
 end
 
 % PRICE-COST MARGIN UNDER COMPETITION
@@ -317,7 +319,7 @@ end
 % PRICE-COST MARGIN UNDER COLLUSION
 markup_hat_col=zeros((J*T_pre),1);
 for t=1:T_pre
-    markup_hat_col(market==t,1)=-Qp(market==t,:)\market_share_hat(market==t,1);
+    markup_hat_col(market==t,1)=-(Qp(market==t,:))\market_share_hat(market==t,1);
 end
 
 % PRICE-COST MARGIN UNDER COLLUSION of FIRMS 3 and 4
@@ -326,7 +328,7 @@ for t=1:T_pre
     markup_hat_partialcol(market==t,1)=-(Qp(market==t,:).*OFcoll)\market_share_hat(market==t,1);
 end
 
-% HIST
+% HISTOGRAM OF PRICE COST MARGINS
 figure;
 subplot(1,3,1);
 histogram(markup_hat_compet,'BinWidth',0.01,'FaceAlpha',0.7,'EdgeColor','none');
@@ -345,29 +347,44 @@ histogram(markup_hat_col,'BinWidth',0.01,'FaceAlpha',0.7,'EdgeColor','none');
 xlabel('Markup (Full collusion)','FontSize',8);
 ylabel('Count','FontSize',8);
 
-sgtitle('Markup Distribution by Product (Competition)','FontSize',14,'FontWeight','bold');
-saveas(gcf,'C:\Users\eliot\Documents\REPOSITORIES\EIO_project/Outputs/markup_distribution_competition.png');
-
 % MARGINAL COST UNDER COMPETITION
 mc_hat_comp=zeros((J*T_pre),1);
 for t=1:T_pre
 mc_hat_comp(market==t,1) = price(market==t,1) + (Qp(market==t,:).*OF) \ market_share_hat(market==t,1);
 end
-histogram(mc_hat_comp)
 
 % MARGINAL COST UNDER COMPLETE COLLUSION
 mc_hat_col=zeros((J*T_pre),1);
 for t=1:T_pre
 mc_hat_col(market==t,1) = price(market==t,1) + (Qp(market==t,:)) \ market_share_hat(market==t,1);
 end
-histogram(mc_hat_col)
 
 % MARGINAL COST UNDER COLLUSION OF 3 AND 4
 mc_hat_partialcol=zeros((J*T_pre),1);
 for t=1:T_pre
 mc_hat_partialcol(market==t,1) = price(market==t,1) + (Qp(market==t,:).*OFcoll) \ market_share_hat(market==t,1);
 end
-histogram(mc_hat_partialcol)
+
+% HISTOGRAMS OF MARGINAL COST
+figure;
+subplot(1,3,1);
+histogram(mc_hat_comp,'BinWidth',0.01,'FaceAlpha',0.7,'EdgeColor','none');
+xlabel('Marginal costs (Competition)','FontSize',8);
+ylabel('Count','FontSize',8);
+grid on;
+
+subplot(1,3,2);
+histogram(mc_hat_partialcol,'BinWidth',0.01,'FaceAlpha',0.7,'EdgeColor','none');
+xlabel('Marginal costs (Partial collusion, only 3 and 4)','FontSize',8);
+ylabel('Count','FontSize',8);
+grid on;
+
+subplot(1,3,3);
+histogram(mc_hat_col,'BinWidth',0.01,'FaceAlpha',0.7,'EdgeColor','none');
+xlabel('Marginal costs (Full collusion)','FontSize',8);
+ylabel('Count','FontSize',8);
+
+
 
 % HISTOGRAM OF PRICE COST MARGINS UNDER COLLUSION AND COMPETITION
 unique_products=unique(product);
@@ -393,9 +410,6 @@ sgtitle('Markup Distribution by Product (Competition)','FontSize',14,'FontWeight
 saveas(gcf,'C:\Users\eliot\Documents\REPOSITORIES\EIO_project/Outputs/markup_distribution_competition.png');
 
 % Collusion Histogram
-close all
-histogram(markups_coll_product)
-
 figure;
 for i=1:num_products
     product_id=unique_products(i);
