@@ -3,7 +3,7 @@ cd('C:\Users\eliot\Documents\REPOSITORIES\EIO_project');
 addpath('C:\Users\eliot\Documents\REPOSITORIES\EIO_project\Data\');
 addpath('C:\Users\eliot\Documents\REPOSITORIES\EIO_project\Utils\');
 addpath('C:\Users\eliot\Documents\REPOSITORIES\EIO_project\Outputs\');
-
+outputPath = 'C:\Users\eliot\Documents\REPOSITORIES\EIO_project\Outputs\';
 
 %%%%%%%%%%%%%%
 % QUESTION 1
@@ -39,7 +39,7 @@ summary_table=table(groups(:,1),groups(:,2),Price_mean,Price_min,Price_max,Price
     'VariableNames',{'firm','product','Price_mean','Price_min','Price_max',...
     'Price_sd','Quantity_mean','Quantity_min','Quantity_max','Quantity_sd'});
 
-fileID=fopen('C:\Users\eliot\Documents\REPOSITORIES\EIO_project/Outputs/summary_table.tex','w');
+fileID=fopen([outputPath,'summary_table.tex'],'w');
 fprintf(fileID,'\\begin{tabular}{lcc|cccc|cccc}\n');
 fprintf(fileID,'\\hline\n');
 fprintf(fileID,'& & & \\multicolumn{4}{c|}{Price} & \\multicolumn{4}{c}{Quantity} \\\\\n');
@@ -96,7 +96,7 @@ fprintf('Difference in HHI: %.4f\n',diff);
 %%%%%%%%%%%%%%
 % QUESTION 3
 %%%%%%%%%%%%%%
-clear;
+clearvars -except outputPath
 load('Data_exam_pre.mat');
 total_quantity=zeros(height(market),1);
 
@@ -123,7 +123,7 @@ VariableNames={'Coef','SE','CI_low','CI_upp'};
 results_table=table(theta_MNL_OLS,SE_MNL_OLS,CIlow_MNL_OLS,CIupp_MNL_OLS,...
     'RowNames',RowNames,'VariableNames',VariableNames);
 
-fileID=fopen('C:\Users\eliot\Documents\REPOSITORIES\EIO_project/Outputs/regression_results_ols.tex','w');
+fileID=fopen([outputPath,'regression_results_ols.tex'],'w');
 fprintf(fileID,'\\begin{tabular}{lcccc}\n');
 fprintf(fileID,'\\hline\n');
 fprintf(fileID,'Variable & Coef & SE & CI$_{low}$ & CI$_{upp}$ \\\\\n');
@@ -180,7 +180,7 @@ VariableNames={'Coef','SE','CI_low','CI_upp'};
 results_table=table(theta_d_GMM,SE_d_GMM,CIlow_d_GMM,CIupp_d_GMM,...
     'RowNames',RowNames,'VariableNames',VariableNames);
 
-fileID=fopen('C:\Users\eliot\Documents\REPOSITORIES\EIO_project/Outputs/gmm_results_cost.tex','w');
+fileID=fopen([outputPath,'gmm_results_cost.tex'],'w');
 fprintf(fileID,'\\begin{tabular}{lcccc}\n');
 fprintf(fileID,'\\hline\n');
 fprintf(fileID,'Variable & Coef & SE & CI$_{low}$ & CI$_{upp}$ \\\\\n');
@@ -201,21 +201,37 @@ Z_d=[ones(size(market,1),1) x Zexcluded_2];
 W=(Z_d'*Z_d)\eye(size(Z_d,2));
 theta_d_GMM2=(X_d'*Z_d*W*Z_d'*X_d)\X_d'*Z_d*W*Z_d'*delta_output;
 xi_GMM2=delta_output-X_d*theta_d_GMM2;
-S=Z_d'*diag(xi_GMM.^2)*Z_d;
+S=Z_d'*diag(xi_GMM2.^2)*Z_d;
 VAR_d_GMM=(X_d'*Z_d*W*(X_d'*Z_d)')\X_d'*Z_d*W*S*W*(X_d'*Z_d)'/(X_d'*Z_d*W*(X_d'*Z_d)');
 SE_d_GMM=sqrt(diag(VAR_d_GMM));
 CIlow_d_GMM=theta_d_GMM2-SE_d_GMM*1.96;
 CIupp_d_GMM=theta_d_GMM2+SE_d_GMM*1.96;
 
+% WEAK INSTRUMENT TEST: F-stat 
+theta_price_MNL  = (Z_d'*Z_d) \ Z_d' * price; % Regress the endogeneous variable p on instruments.
+res_price_MNL    = price - Z_d * theta_price_MNL;
+VARCOV_price_MNL = ( (res_price_MNL' * res_price_MNL) / (size(Z_d,1) - size(Z_d,2)) ) * ((Z_d'*Z_d) \ eye(size(Z_d,2)));
+H = zeros(size(Z_d,2),size(Z_d,2));
+i = 1;
+for j = 1 : size(Zexcluded_2,2)
+    H(i,j) = 1;
+    i      = i + 1;
+end
+c = zeros(size(Z_d,2),1);
+%[p,F_stat_MNL]=linhyptest(theta_price_MNL,VARCOV_price_MNL,c,H,size(Z_d,1)-size(Z_d,2));
+%display(sprintf('\n 1st F-stat: %f %d',F_stat_MNL,p)) 
+%clear theta_price_MNL res_price_MNL VARCOV_price_MNL se_price_MNL T_test_price_MNL pvalue_price_MNL  H i c p
+
+
 % PERFORMING HANSEN TEST OF OVER-IDENTIFICATION
-hansenTestGMM(delta_output, X_d, Z_d, theta_d_GMM)
+hansenTestGMM(X_d, Z_d, xi_GMM2)
 
 RowNames={'Constant','Beta','Alpha'};
 VariableNames={'Coef','SE','CI_low','CI_upp'};
 results_table=table(theta_d_GMM2,SE_d_GMM,CIlow_d_GMM,CIupp_d_GMM,...
     'RowNames',RowNames,'VariableNames',VariableNames);
 
-fileID=fopen('C:\Users\eliot\Documents\REPOSITORIES\EIO_project/Outputs/gmm_results_blp.tex','w');
+fileID=fopen([outputPath,'gmm_results_blp.tex'],'w');
 fprintf(fileID,'\\begin{tabular}{lcccc}\n');
 fprintf(fileID,'\\hline\n');
 fprintf(fileID,'Variable & Coef & SE & CI$_{low}$ & CI$_{upp}$ \\\\\n');
@@ -235,21 +251,23 @@ Z_d=[ones(size(market,1),1) x Zexcluded_1 Zexcluded_2];
 W=(Z_d'*Z_d)\eye(size(Z_d,2));
 theta_d_GMM3=(X_d'*Z_d*W*Z_d'*X_d)\X_d'*Z_d*W*Z_d'*delta_output;
 xi_GMM3=delta_output-X_d*theta_d_GMM3;
-S=Z_d'*diag(xi_GMM.^2)*Z_d;
+S=Z_d'*diag(xi_GMM3.^2)*Z_d;
 VAR_d_GMM=(X_d'*Z_d*W*(X_d'*Z_d)')\X_d'*Z_d*W*S*W*(X_d'*Z_d)'/(X_d'*Z_d*W*(X_d'*Z_d)');
 SE_d_GMM=sqrt(diag(VAR_d_GMM));
 CIlow_d_GMM=theta_d_GMM3-SE_d_GMM*1.96;
 CIupp_d_GMM=theta_d_GMM3+SE_d_GMM*1.96;
 
 % PERFORMING HANSEN TEST OF OVER-IDENTIFICATION
-hansenTestGMM(delta_output, X_d, Z_d, theta_d_GMM3)
+hansenTestGMM(X_d, Z_d, xi_GMM3)
+
+
 
 RowNames={'Constant','Beta','Alpha'};
 VariableNames={'Coef','SE','CI_low','CI_upp'};
 results_table=table(theta_d_GMM3,SE_d_GMM,CIlow_d_GMM,CIupp_d_GMM,...
     'RowNames',RowNames,'VariableNames',VariableNames);
 
-fileID=fopen('C:\Users\eliot\Documents\REPOSITORIES\EIO_project/Outputs/gmm_results_cost_blp.tex','w');
+fileID=fopen([outputPath,'gmm_results_cost_blp.tex'],'w');
 fprintf(fileID,'\\begin{tabular}{lcccc}\n');
 fprintf(fileID,'\\hline\n');
 fprintf(fileID,'Variable & Coef & SE & CI$_{low}$ & CI$_{upp}$ \\\\\n');
@@ -279,7 +297,7 @@ market_share_hat=zeros(T_pre*J,1);
 for t=1:T_pre
     for j=1:J
         idx=(t-1)*J+j; % Linear index for market-share-related variables
-        utility=theta_d_GMM3(1,1)+theta_d_GMM3(2,1)*x((t-1)*J+j,1)+theta_d_GMM3(3,1)*price((t-1)*J+j,1)+xi_GMM3((t-1)*J+j,1);
+        utility=theta_d_GMM(1,1)+theta_d_GMM(2,1)*x((t-1)*J+j,1)+theta_d_GMM(3,1)*price((t-1)*J+j,1)+xi_GMM((t-1)*J+j,1);
         nume(t,j)=exp(utility);
         deno(t,1)=deno(t,1)+nume(t,j);
     end
@@ -304,10 +322,10 @@ OFcoll(11:end,11:end)=1;
 Qp=zeros(J*T_pre,J);
 for t=1:T_pre
     for j=1:J
-        Qp(market==t,j)=abs(theta_d_GMM3(3,1))*(market_share_hat(market==t,1).*market_share_hat_matrix(t,j));
+        Qp(market==t,j)=abs(theta_d_GMM(3,1))*(market_share_hat(market==t,1).*market_share_hat_matrix(t,j));
     end
     Qp(market==t,:)=Qp(market==t,:).*(ones(J,J)-eye(J));
-    Qp(market==t,:)=Qp(market==t,:)+diag(theta_d_GMM3(3,1)*(market_share_hat(market==t,1).*(ones(J,1)-market_share_hat(market==t,1))));
+    Qp(market==t,:)=Qp(market==t,:)+diag(theta_d_GMM(3,1)*(market_share_hat(market==t,1).*(ones(J,1)-market_share_hat(market==t,1))));
 end
 
 % PRICE-COST MARGIN UNDER COMPETITION
@@ -322,30 +340,19 @@ for t=1:T_pre
     markup_hat_col(market==t,1)=-(Qp(market==t,:))\market_share_hat(market==t,1);
 end
 
-% PRICE-COST MARGIN UNDER COLLUSION of FIRMS 3 and 4
-markup_hat_partialcol=zeros((J*T_pre),1);
-for t=1:T_pre
-    markup_hat_partialcol(market==t,1)=-(Qp(market==t,:).*OFcoll)\market_share_hat(market==t,1);
-end
-
 % HISTOGRAM OF PRICE COST MARGINS
 figure;
-subplot(1,3,1);
+subplot(1,2,1);
 histogram(markup_hat_compet,'BinWidth',0.01,'FaceAlpha',0.7,'EdgeColor','none');
 xlabel('Markup (Competition)','FontSize',8);
 ylabel('Count','FontSize',8);
 grid on;
 
-subplot(1,3,2);
-histogram(markup_hat_partialcol,'BinWidth',0.01,'FaceAlpha',0.7,'EdgeColor','none');
-xlabel('Markup (Partial collusion, only 3 and 4)','FontSize',8);
-ylabel('Count','FontSize',8);
-grid on;
-
-subplot(1,3,3);
-histogram(markup_hat_col,'BinWidth',0.01,'FaceAlpha',0.7,'EdgeColor','none');
+subplot(1,2,2);
+histogram(markup_hat_col,'BinWidth',0.05,'FaceAlpha',0.7,'EdgeColor','none');
 xlabel('Markup (Full collusion)','FontSize',8);
 ylabel('Count','FontSize',8);
+saveas(gcf,[outputPath,'markup_distribution_collusion.png']);
 
 % MARGINAL COST UNDER COMPETITION
 mc_hat_comp=zeros((J*T_pre),1);
@@ -353,16 +360,10 @@ for t=1:T_pre
 mc_hat_comp(market==t,1) = price(market==t,1) + (Qp(market==t,:).*OF) \ market_share_hat(market==t,1);
 end
 
-% MARGINAL COST UNDER COMPLETE COLLUSION
+% MARGINAL COST UNDER COLLUSION
 mc_hat_col=zeros((J*T_pre),1);
 for t=1:T_pre
 mc_hat_col(market==t,1) = price(market==t,1) + (Qp(market==t,:)) \ market_share_hat(market==t,1);
-end
-
-% MARGINAL COST UNDER COLLUSION OF 3 AND 4
-mc_hat_partialcol=zeros((J*T_pre),1);
-for t=1:T_pre
-mc_hat_partialcol(market==t,1) = price(market==t,1) + (Qp(market==t,:).*OFcoll) \ market_share_hat(market==t,1);
 end
 
 % HISTOGRAMS OF MARGINAL COST
@@ -373,53 +374,93 @@ xlabel('Marginal costs (Competition)','FontSize',8);
 ylabel('Count','FontSize',8);
 grid on;
 
-subplot(1,3,2);
-histogram(mc_hat_partialcol,'BinWidth',0.01,'FaceAlpha',0.7,'EdgeColor','none');
-xlabel('Marginal costs (Partial collusion, only 3 and 4)','FontSize',8);
-ylabel('Count','FontSize',8);
-grid on;
-
-subplot(1,3,3);
-histogram(mc_hat_col,'BinWidth',0.01,'FaceAlpha',0.7,'EdgeColor','none');
+subplot(1,2,2);
+histogram(mc_hat_col,'BinWidth',0.05,'FaceAlpha',0.7,'EdgeColor','none');
 xlabel('Marginal costs (Full collusion)','FontSize',8);
 ylabel('Count','FontSize',8);
+saveas(gcf,[outputPath,'mc_distribution_collusion.png']);
 
+%%%%%%%%%%%%
+% QUESTION 7
+%%%%%%%%%%%%
 
+% OWNERSHIP MATRIX AFTER FIRM 3 AND FIRM 4 MERGE
+OF_merge=zeros(J,J); % Initialize the ownership matrix
+firm_matrix_collusion=customDummyVar(firm); % Create dummy variable matrix for firm ownership
 
-% HISTOGRAM OF PRICE COST MARGINS UNDER COLLUSION AND COMPETITION
-unique_products=unique(product);
-num_products=length(unique_products);
+% Loop through products to fill the ownership matrix
+for j=1:J
+    % Get the firm for the current product in market t
+    current_firm=firm(market==t&product==j,1);
 
-% Competition Histogram
+    if current_firm==3 || current_firm==4
+        colluding_firms=[3,4];
+        OF_merge(j,:)=sum(firm_matrix_collusion(market==t,colluding_firms),2)';
+    else
+        % For other firms, retain the actual ownership
+        OF_merge(j,:)=firm_matrix_collusion(market==t,current_firm)';
+    end
+end
+
+% PRICE-COST MARGIN UNDER COMPETITION
+markup_hat_merge_approx=zeros((J*T_pre),1);
+for t=1:T_pre
+    markup_hat_merge_approx(market==t,1)=-(Qp(market==t,:).*OF_merge)\market_share_hat(market==t,1);
+end
+
+% NEW PRICE
+price_merge_approx = zeros(J*T_pre,1);
+for t=1:T_pre
+    price_merge_approx(market==t,1)=mc_hat_comp(market==t,1)+markup_hat_merge_approx(market==t);
+end
+
+data_table_sim=table(market,price,price_merge_approx,firm,product);
+data_table_sim.price_change=(data_table_sim.price_merge_approx-data_table_sim.price)./data_table_sim.price;
+
+average_price_change = zeros(4,1);
+for i=1:4
+    firm_id=i; % Current firm ID
+    % Get the rows corresponding to the current firm
+    firm_indices=(data_table_sim.firm==firm_id);
+    % Compute the average price change for the current firm
+    average_price_change(i)=mean(data_table_sim.price_change(firm_indices));
+end
+
+%%%%%%%%%%%%%%
+% QUESTION 8
+%%%%%%%%%%%%%%
+
+% SOLVING USING fminunc AND quasi-newton algorithm
 close all
-histogram(markup_hat_compet)
-histogram(markup_hat_partialcol)
-
-figure;
-for i=1:num_products
-    product_id=unique_products(i);
-    markups_compet_product=markup_hat_compet(product==product_id);
-    subplot(4,5,i);
-    histogram(markups_compet_product,'BinWidth',0.01,'FaceAlpha',0.7,'EdgeColor','none');
-    title(['Product ',num2str(product_id)],'FontSize',10);
-    xlabel('Markup (Competition)','FontSize',8);
-    ylabel('Count','FontSize',8);
-    grid on;
+price_merge = zeros(J*T_pre,1);
+for t = 1:T_pre
+    price_merge(J*(t-1)+1:J*t,1) = solveP(price(market==t),x,theta_d_GMM,xi_GMM,t,J,market,OF_merge,mc_hat_comp);
 end
-sgtitle('Markup Distribution by Product (Competition)','FontSize',14,'FontWeight','bold');
-saveas(gcf,'C:\Users\eliot\Documents\REPOSITORIES\EIO_project/Outputs/markup_distribution_competition.png');
+histogram(price_merge) 
+% pb 1: some prices negatives
+% pb 2: difficulty computing inverse of (Qp(:,:).*OF_merge)
 
-% Collusion Histogram
-figure;
-for i=1:num_products
-    product_id=unique_products(i);
-    markups_coll_product=markup_hat_col(product==product_id);
-    subplot(4,5,i);
-    histogram(markups_coll_product,'BinWidth',0.01,'FaceAlpha',0.7,'EdgeColor','none');
-    title(['Product ',num2str(product_id)],'FontSize',10);
-    xlabel('Markup (Collusion)','FontSize',8);
-    ylabel('Count','FontSize',8);
-    grid on;
+
+% SOLVING USING fsolve
+% setting up objects
+nume=zeros(1,J);
+deno=zeros(1,1);
+deno=exp(deno);
+market_share_hat_matrix=zeros(1,J);
+market_share_hat=zeros(1*J,1);
+Qp=zeros(J*1,J);
+
+price_merge2 = zeros(J*T_pre,1);
+for t = 1:T_pre
+    % initialise prices at pre-merger
+    price_0 = price(market==t); 
+    options = optimoptions('fsolve', ...
+        'TolFun', 1e-14, ...   % Function tolerance
+        'TolX', 1e-14, ...     % Step tolerance
+        'Display', 'final-detailed');   % Display iteration information
+    price_merge2(J*(t-1)+1:J*t,1)  = fsolve(@(price_post) mergerSystem(price_post,x,theta_d_GMM3,xi_GMM3,t,J,market,OF_merge,mc_hat_comp,nume,deno,market_share_hat,market_share_hat_matrix,Qp), price_0, options);
 end
-sgtitle('Markup Distribution by Product (Collusion)','FontSize',14,'FontWeight','bold');
-saveas(gcf,'C:\Users\eliot\Documents\REPOSITORIES\EIO_project/Outputs/markup_distribution_collusion.png');
+histogram(price_merge2)
+
+
+
