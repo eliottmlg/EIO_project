@@ -374,14 +374,14 @@ end
 % SUPPLY - QUESTION 5
 %%%%%%%%%%%%%%%%%%%%%
 % MARKET SHARE ESTIMATED FROM LOGIT
-nume=zeros(1,J);
-deno=zeros(1,1);
+nume=zeros(T_pre,J);
+deno=zeros(T_pre,1);
 deno=exp(deno);
-market_share_hat_matrix=zeros(1,J);
-market_share_hat=zeros(1*J,1);
+market_share_hat_matrix=zeros(T_pre,J);
+market_share_hat=zeros(T_pre*J,1);
 
 % Loop over markets and products
-for t=1
+for t=1:T_pre
     for j=1:J
         idx=(t-1)*J+j; % Linear index for market-share-related variables
         utility=theta_d_GMM(1,1)+theta_d_GMM(2,1)*x((t-1)*J+j,1)+theta_d_GMM(3,1)*price((t-1)*J+j,1)+xi_GMM((t-1)*J+j,1);
@@ -402,7 +402,7 @@ for j=1:J
 end
 
 % ESTIMATED JACOBIAN DEMAND
-Qp=zeros(J,J);
+Qp=zeros(J*T_pre,J);
 for t=1
     for j=1:J
         Qp(market==t,j)=abs(theta_d_GMM(3,1))*(market_share_hat(market==t,1).*market_share_hat_matrix(t,j));
@@ -412,8 +412,61 @@ for t=1
 end
 
 % PRICE-COST MARGIN UNDER COMPETITION
-markup_hat_compet=zeros((J),1);
+markup_hat_compet=zeros((J*T_pre),1);
 for t=1
+    markup_hat_compet(market==t,1)=-(Qp(market==t,:).*OF)\market_share_hat(market==t,1);
+end
+
+% PRICE-COST MARGIN UNDER COLLUSION
+markup_hat_col=zeros((J*T_pre),1);
+for t=1:T_pre
+    markup_hat_col(market==t,1)=-(Qp(market==t,:))\market_share_hat(market==t,1);
+end
+
+%%%%%%%%%%%%%%%%%%%%%
+% SUPPLY - QUESTION 5
+%%%%%%%%%%%%%%%%%%%%%
+% MARKET SHARE ESTIMATED FROM LOGIT
+nume=zeros(T_pre,J);
+deno=zeros(T_pre,1);
+deno=exp(deno);
+market_share_hat_matrix=zeros(T_pre,J);
+market_share_hat=zeros(T_pre*J,1);
+
+% Loop over markets and products
+for t=1:T_pre
+    for j=1:J
+        idx=(t-1)*J+j; % Linear index for market-share-related variables
+        utility=theta_d_GMM(1,1)+theta_d_GMM(2,1)*x((t-1)*J+j,1)+theta_d_GMM(3,1)*price((t-1)*J+j,1)+xi_GMM((t-1)*J+j,1);
+        nume(t,j)=exp(utility);
+        deno(t,1)=deno(t,1)+nume(t,j);
+    end
+    for j=1:J
+        market_share_hat_matrix(t,j)=nume(t,j)./deno(t,1);
+        market_share_hat((t-1)*J+j,1)=market_share_hat_matrix(t,j);
+    end
+end
+
+% OWNERSHIP MATRIX WHEN COMPETITION
+OF=zeros(J,J);
+firm_matrix=customDummyVar(firm);
+for j=1:J
+    OF(j,:)=firm_matrix(market==t,firm(market==t&product==j,1))';
+end
+
+% ESTIMATED JACOBIAN DEMAND
+Qp=zeros(J*T_pre,J);
+for t=1:T_pre
+    for j=1:J
+        Qp(market==t,j)=abs(theta_d_GMM(3,1))*(market_share_hat(market==t,1).*market_share_hat_matrix(t,j));
+    end
+    Qp(market==t,:)=Qp(market==t,:).*(ones(J,J)-eye(J));
+    Qp(market==t,:)=Qp(market==t,:)+diag(theta_d_GMM(3,1)*(market_share_hat(market==t,1).*(ones(J,1)-market_share_hat(market==t,1))));
+end
+
+% PRICE-COST MARGIN UNDER COMPETITION
+markup_hat_compet=zeros((J*T_pre),1);
+for t=1:T_pre
     markup_hat_compet(market==t,1)=-(Qp(market==t,:).*OF)\market_share_hat(market==t,1);
 end
 
@@ -435,7 +488,7 @@ subplot(1,2,2);
 histogram(markup_hat_col,'BinWidth',0.05,'FaceAlpha',0.7,'EdgeColor','none');
 xlabel('Markup (Full collusion)','FontSize',8);
 ylabel('Count','FontSize',8);
-saveas(gcf,[outputPath,'markup_distribution_collusion.png']);
+saveas(gcf,'markup_distribution.png');
 
 %%%%%%%%%%%%%
 % QUESTION 6
@@ -529,6 +582,7 @@ end
 histogram(price_merge) 
 % pb 1: some prices negatives
 % pb 2: difficulty computing inverse of (Qp(:,:).*OF_merge)
+saveas(gcf,[outputPath,'price_merge.png']);
 
 % SOLVING USING fsolve
 % Define a global variable to store the history
@@ -553,9 +607,10 @@ for t = 1:T_pre
         'Display', 'final-detailed',...
         'OutputFcn', @outfun);   % Display iteration information
 %     price_merge2(J*(t-1)+1:J*t,1)  = fsolve(@(price_post) mergerSystem(price_post,x,theta_d_GMM,xi_GMM,t,J,market,OF_merge,mc_hat_comp,nume,deno,market_share_hat,market_share_hat_matrix,Qp), price_0, options);
-    price_merge2(J*(t-1)+1:J*t,1)  = fsolve(@(price_post) mergerSystem2(price_post,x,theta_d_GMM,xi_GMM,t,J,market,OF_merge,mc_hat_comp,nume,deno,market_share_hat,market_share_hat_matrix,Qp), price_0, options);
+    price_merge2(J*(t-1)+1:J*t,1)  = fsolve(@(price_post) mergerSystem(price_post,x,theta_d_GMM,xi_GMM,t,J,market,OF_merge,mc_hat_comp,nume,deno,market_share_hat,market_share_hat_matrix,Qp), price_0, options);
 end
 histogram(price_merge2)
+saveas(gcf,[outputPath,'price_merge2.png']);
 % pb: some prices negatives and overall too low
 plot(history(1:500));
 
