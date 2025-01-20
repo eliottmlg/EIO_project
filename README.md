@@ -1,1 +1,1 @@
-# EIO_project
+# Empirical Industrial Organisation --- Final assignment
